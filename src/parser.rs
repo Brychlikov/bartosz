@@ -310,8 +310,12 @@ impl Parser<'_> {
             Punctuation(c) if c == "(" => {
                 let _= self.input.next();
                 let ast = self.parse_expression();
-                assert_eq!(self.input.next().unwrap().unwrap(), Punctuation(")".to_string())); // TODO replace with result
-                ast
+                match self.input.next() {
+                    Some(Ok(Punctuation(c))) if c == ")" => (ast),
+                    Some(Ok(x)) => Err(format!("Unexpected Token: {:?}", x).into()),
+                    Some(Err(e)) => Err(format!("Toknizer error: {}", e.display_chain()).into()),
+                    None => Err("Unexpected EOF".into())
+                }
             },
             Keyword(name) => {
                 let _ = self.input.next();
