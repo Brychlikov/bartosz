@@ -149,7 +149,7 @@ impl TokenStream<'_> {
     }
 
     fn is_operator(c: &char) -> bool {
-        "*/-+=".contains(*c)
+        "*/-+=^".contains(*c)
     }
 
 }
@@ -247,6 +247,26 @@ mod tests {
                 Err(e) => panic!("Error during tokenization: {}", e.display_chain()),
             };
         }
+    }
+
+    #[test]
+    fn test_power() {
+        let s = "2 ^ 15 - 5^2";
+        let expected = vec![
+            Token::Number(2.0),
+            Token::Operator("^".to_owned()),
+            Token::Number(15.0),
+            Token::Operator("-".to_owned()),
+            Token::Number(5.0),
+            Token::Operator("^".to_owned()),
+            Token::Number(2.0),
+        ];
+
+        match parse(s) {
+            Ok(tokens) => assert_eq!(tokens, expected),
+            Err(e) => panic!("Error during tokenization: {}", e.display_chain()),
+        };
+
     }
 
 

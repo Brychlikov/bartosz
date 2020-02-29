@@ -119,8 +119,8 @@ impl Ast {
             // println!("begin assign");
             
             let dep_set = rhs.dependency_set(env);
-            println!("Assigning {} to {:#?}", lhs, rhs);
-            println!("Dependency set: {:?}", &dep_set);
+            // println!("Assigning {} to {:#?}", lhs, rhs);
+            // println!("Dependency set: {:?}", &dep_set);
             if dep_set.contains(lhs) {
                 bail!("Dependency cycle");
             }
@@ -160,6 +160,7 @@ impl Ast {
                 "-" => Ok(lhs.eval(env)? - rhs.eval(env)?),
                 "*" => Ok(lhs.eval(env)? * rhs.eval(env)?),
                 "/" => Ok(lhs.eval(env)? / rhs.eval(env)?),
+                "^" => Ok(lhs.eval(env)?.powf(rhs.eval(env)?)),
                 _ => unreachable!(),
             }
         }
@@ -265,6 +266,7 @@ lazy_static! {
         m.insert("-".to_string(), 10);
         m.insert("*".to_string(), 20);
         m.insert("/".to_string(), 20);
+        m.insert("^".to_string(), 30);
         m
     };
 }
@@ -453,6 +455,12 @@ mod tests {
         assert_eq!(res1, 5.0);
         let res2 = calc.eval("x").unwrap();
         assert_eq!(res2, 5.0);
+    }
+
+    #[test]
+    fn test_power() {
+        let mut calc = Calculator::new();
+        assert_eq!(calc.eval("2 ^ 3").unwrap(), 8.0);
     }
 }
 
