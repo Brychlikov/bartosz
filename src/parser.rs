@@ -67,8 +67,14 @@ impl Calculator {
         let ast = parser.parse_expression()
             .chain_err(|| "Syntax Error: ")?;
         // println!("{:#?}", ast);
-        ast.eval(&mut self.env)
-            .chain_err(|| "Evaluation error: ")
+        let res = ast.eval(&mut self.env)
+            .chain_err(|| "Evaluation error: ")?;
+        if let None = parser.input.peek() {
+            Ok(res)
+        }
+        else {
+            Err(format!("Unexpected Token: {:?}", parser.input.peek().unwrap()).into())
+        }
     }
 }
 
@@ -161,7 +167,7 @@ impl Ast {
                 "*" => Ok(lhs.eval(env)? * rhs.eval(env)?),
                 "/" => Ok(lhs.eval(env)? / rhs.eval(env)?),
                 "^" => Ok(lhs.eval(env)?.powf(rhs.eval(env)?)),
-                _ => unreachable!(),
+                _ => panic!("Attempt to parse unknown operator: {}", &op),
             }
         }
         else {
@@ -304,7 +310,7 @@ impl Parser<'_> {
             Punctuation(c) if c == "(" => {
                 let _= self.input.next();
                 let ast = self.parse_expression();
-                assert_eq!(self.input.next().unwrap().unwrap(), Punctuation(")".to_string()));
+                assert_eq!(self.input.next().unwrap().unwrap(), Punctuation(")".to_string())); // TODO replace with result
                 ast
             },
             Keyword(name) => {
@@ -361,11 +367,29 @@ impl Parser<'_> {
     }
 
     fn maybe_binary(&mut self, left: Box<Ast>, priority: i32) -> Result<Box<Ast>> {
-        if let Ok(Operator(op)) = self.peek_clone() {
-            let other_priority = *OP_PRIORITY.get(&op)
-                .chain_err(|| format!("Unknown operator: {}", op))?;
+        if let Ok(Operator(mut op)) | Ok(Punctuation(mut op)) = self.peek_clone() {
+
+            let other_priority;
+            let from_parans;
+            if let Ok(Punctuation(_)) = self.peek_clone() {
+                if op != "(" {
+                    return Ok(left)
+                }
+                from_parans = true;
+                op = "*".to_string();
+                other_priority = *OP_PRIORITY.get("*")
+                    .chain_err(|| format!("Unknown operator: {}", op))?;
+            }
+            else {
+                from_parans = false;
+                other_priority = *OP_PRIORITY.get(&op)
+                    .chain_err(|| format!("Unknown operator: {}", op))?;
+            }
+                
             if other_priority > priority {
-                let _ = self.input.next();
+                if !from_parans {
+                    let _ = self.input.next();
+                }
                 let atom = self.parse_atomic()
                     .chain_err(|| "Parser error")?;
                 let right = self.maybe_binary(atom, other_priority)
@@ -457,10 +481,23 @@ mod tests {
         assert_eq!(res2, 5.0);
     }
 
+    // #[test]
+    // fn calculator_test() {
+    //     let mut calc = Calculator::new();
+
+    // }
+
     #[test]
     fn test_power() {
         let mut calc = Calculator::new();
         assert_eq!(calc.eval("2 ^ 3").unwrap(), 8.0);
+    }
+
+    #[test]
+    fn test_implicit_multiplication() {
+        let mut calc = Calculator::new();
+        let res = calc.eval("2 + 3(4 - 5)").unwrap();
+        assert_eq!(res, -1.0);
     }
 }
 

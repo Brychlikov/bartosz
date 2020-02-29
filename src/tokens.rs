@@ -108,11 +108,18 @@ impl TokenStream<'_> {
     }
 
     fn read_digit(&mut self) -> Result<Token> {
-        let res = self.read_while(TokenStream::is_digit_con);
+        let mut res = self.read_while(TokenStream::is_digit_con);
+        if let Some('e') | Some('E') = self.input.peek() {
+            res.push(self.input.next().unwrap());
+            if let Some('-') = self.input.peek() {
+                res.push(self.input.next().unwrap());
+            }
+            res += &self.read_while(TokenStream::is_digit);
+        }
         let num = res.parse::<f64>();
         Ok(Token::Number(
             num.chain_err(|| ErrorKind::NumberParseError(res))?
-        ))  // TODO - proper error handling
+        ))  
     }
 
     fn is_digit(c: &char) -> bool {
@@ -120,7 +127,7 @@ impl TokenStream<'_> {
     }
 
     fn is_digit_con(c: &char) -> bool {
-        "1234567890eE.".contains(*c)  // TODO Exponential notation for neg exponents
+        "1234567890.".contains(*c) 
     }
 
     fn read_ident(&mut self) -> Token {
@@ -260,6 +267,22 @@ mod tests {
             Token::Number(5.0),
             Token::Operator("^".to_owned()),
             Token::Number(2.0),
+        ];
+
+        match parse(s) {
+            Ok(tokens) => assert_eq!(tokens, expected),
+            Err(e) => panic!("Error during tokenization: {}", e.display_chain()),
+        };
+
+    }
+
+    #[test]
+    fn test_negative_exponent() {
+        let s = "2e4 - 3e-2";
+        let expected = vec![
+            Token::Number(2e4),
+            Token::Operator("-".to_owned()),
+            Token::Number(3e-2),
         ];
 
         match parse(s) {
