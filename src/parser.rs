@@ -66,7 +66,7 @@ impl Calculator {
         let mut parser = Parser::from_str(input);
         let ast = parser.parse_expression()
             .chain_err(|| "Syntax Error: ")?;
-        // println!("{:#?}", ast);
+        println!("{:#?}", ast);
         let res = ast.eval(&mut self.env)
             .chain_err(|| "Evaluation error: ")?;
         if let None = parser.input.peek() {
@@ -521,6 +521,15 @@ mod tests {
         let mut calc = Calculator::new();
         match calc.eval("x = y = 5") {
             Ok(x) => assert_eq!(x, 5.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
+    }
+
+    #[test]
+    fn equal_priority_chain() {
+        let mut calc = Calculator::new();
+        match calc.eval("2 + 2 + 2") {
+            Ok(x) => assert_eq!(x, 6.0),
             Err(e) => panic!("{}", e.display_chain())
         }
     }
