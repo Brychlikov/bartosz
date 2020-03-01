@@ -109,8 +109,14 @@ impl Ast {
             Ast::Var { name } => {
                 let mut res = HashSet::new();
                 res.insert(name.clone());
-                res.extend(env[name].dependency_set(env));
-                res
+                match env.get(name) {
+                    Some(a) => {
+                        res.extend(a.dependency_set(env));
+                        res
+                    }
+                    // return whatever, evaluation will fail because of unknown variable regardless
+                    None => HashSet::new()  
+                }
             },
             Ast::Assign { lhs, rhs } => {
                 let mut res = rhs.dependency_set(env);
@@ -390,7 +396,7 @@ impl Parser<'_> {
                     .chain_err(|| format!("Unknown operator: {}", op))?;
             }
                 
-            if other_priority > priority {
+            if other_priority > priority || op == "=" {  // assignment should always be right-to-left
                 if !from_parans {
                     let _ = self.input.next();
                 }
@@ -502,6 +508,21 @@ mod tests {
         let mut calc = Calculator::new();
         let res = calc.eval("2 + 3(4 - 5)").unwrap();
         assert_eq!(res, -1.0);
+    }
+
+    #[test]
+    fn assign_non_existent() {
+        let mut calc = Calculator::new();
+        let _ = calc.eval("x = a").unwrap_err();
+    }
+
+    #[test]
+    fn assign_to_assign_value() {
+        let mut calc = Calculator::new();
+        match calc.eval("x = y = 5") {
+            Ok(x) => assert_eq!(x, 5.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
     }
 }
 
