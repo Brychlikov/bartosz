@@ -1,27 +1,29 @@
-use std::io::prelude::*;
-use calculator::parser::{Parser, Calculator};
+use calculator::parser::Calculator;
+use rustyline::Editor;
+use rustyline::error::ReadlineError;
 
 use error_chain::ChainedError;
 
 fn main() {
     let mut calc = Calculator::new();
+
+    let mut rl = Editor::<()>::new();
     loop {
-        print!("\n> ");
-        std::io::stdout().flush().unwrap();
-        let mut input = String::new();
-        match std::io::stdin().read_line(&mut input) {
-            Ok(_) => {
+        match rl.readline("> ") {
+            Ok(input) => {
+                rl.add_history_entry(&input);
                 match calc.eval(&input) {
                     Ok(x) => {
                         // println!("{:?}", ast);
                         // println!("{:?}", &environment);
-                            println!("{}", x)
+                            println!("{}\n", x)
                     }
-                    Err(e) => println!("{}", e.display_chain()),
+                    Err(e) => println!("{}\n", e.display_chain()),
                 }
             }
+            Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => break,
             Err(e) => {
-                println!("Error reading input: {}", e);
+                println!("Error reading input: {}\n", e);
             }
         }
     }
