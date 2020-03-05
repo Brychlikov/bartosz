@@ -13,6 +13,9 @@ pub mod errors {
             UnexpectedToken {
                 description("Token not expected")
             }
+            EOF {
+                description("Unexpected EOF")
+            }
 
         }
 
@@ -66,7 +69,7 @@ impl Calculator {
         let mut parser = Parser::from_str(input);
         let ast = parser.parse_expression()
             .chain_err(|| "Syntax Error: ")?;
-        println!("{:#?}", ast);
+        // println!("{:#?}", ast);
         let res = ast.eval(&mut self.env)
             .chain_err(|| "Evaluation error: ")?;
         if let None = parser.input.peek() {
@@ -166,6 +169,7 @@ impl Ast {
     }
 
     fn eval_binary(&self, env: &mut Env) -> Result<f64> {
+        // TODO because of chaining this tries to parse "=" operator
         if let Ast::Binary { op, lhs, rhs } = self {
             match op.as_ref() {
                 "+" => Ok(lhs.eval(env)? + rhs.eval(env)?),
@@ -292,13 +296,18 @@ impl Parser<'_> {
 
     pub fn parse_expression(&mut self) -> Result<Box<Ast>> {
         let atomic = self.parse_atomic()?;
-        self.maybe_binary(atomic, 0)
+        let ast = match self.peek_clone() {
+            Ok(Operator(op)) => self.maybe_binary(atomic, OP_PRIORITY[&op])?,
+            _ => atomic
+        };
+        Ok(ast)
+        
     }
 
     fn parse_atomic(&mut self) -> Result<Box<Ast>> {
         let ch = match
             self.input.peek()
-            .chain_err(|| "Unexpected EOF")?
+            .chain_err(|| ErrorKind::EOF)?
         {
             Ok(x) => x.clone(),
             Err(e) => return Err(format!("Temporary Error message: {}", e.display_chain()).into()),
@@ -341,7 +350,7 @@ impl Parser<'_> {
             }
             Some(Ok(c)) => bail!(format!("Expected token \"(\" got {:?}", c)),
             Some(Err(e)) => return Err(format!("Tokenizer error: {}", e.display_chain()).into()),
-            None => return Err("Unexpected EOF".into()),
+            None => return Err(ErrorKind::EOF.into()),
         };
 
         loop {
@@ -369,43 +378,29 @@ impl Parser<'_> {
     fn peek_clone(&mut self) -> Result<Token> {
         match
             self.input.peek()
-            .chain_err(|| "Unexpected EOF")?
+            .chain_err(|| Error::from_kind(ErrorKind::EOF))?
         {
             Ok(x) => Ok(x.clone()),
             Err(e) => return Err(format!("Temporary Error message: {}", e.display_chain()).into()),
         }
     }
 
-    fn maybe_binary(&mut self, left: Box<Ast>, priority: i32) -> Result<Box<Ast>> {
+    fn maybe_binary(&mut self, left: Box<Ast>, mut priority: i32) -> Result<Box<Ast>> {
         if let Ok(Operator(mut op)) | Ok(Punctuation(mut op)) = self.peek_clone() {
 
-            let other_priority;
-            let from_parans;
-            if let Ok(Punctuation(_)) = self.peek_clone() {
-                if op != "(" {
-                    return Ok(left)
-                }
-                from_parans = true;
-                op = "*".to_string();
-                other_priority = *OP_PRIORITY.get("*")
-                    .chain_err(|| format!("Unknown operator: {}", op))?;
-            }
-            else {
-                from_parans = false;
-                other_priority = *OP_PRIORITY.get(&op)
-                    .chain_err(|| format!("Unknown operator: {}", op))?;
-            }
+            let mut other_priority = OP_PRIORITY[&op];
+            let mut ast = left;
+
                 
             if other_priority > priority || op == "=" {  // assignment should always be right-to-left
-                if !from_parans {
-                    let _ = self.input.next();
-                }
+                let _ = self.input.next();
+
                 let atom = self.parse_atomic()
                     .chain_err(|| "Parser error")?;
                 let right = self.maybe_binary(atom, other_priority)
                     .chain_err(|| "Parser error")?;
                 if op == "=" {
-                    return match *left {
+                    return match *ast {  // match against lhs
                         Ast::Var { name } => Ok(Box::new(
                                 Ast::Assign {
                                     lhs: name,
@@ -418,15 +413,57 @@ impl Parser<'_> {
                 return Ok(Box::new(
                         Ast::Binary {
                             op: op.to_string(),
-                            lhs: left,
+                            lhs: ast,
                             rhs: right,
                         }
                 ))
             }
-            let _ = self.input.next();
+
+            else {
+                let mut should_break = false;
+                while other_priority == priority && !should_break {
+                    let _ = self.input.next();
+                    let mut  real_next_op = op.clone();
+
+                    let right_atom = match self.parse_atomic() {
+                        x @ Ok(_) => x,
+                        Err(Error(ErrorKind::EOF, _)) => { return Ok(ast); }
+                        e => e,
+                    }
+                        .chain_err(|| "Parser error")?;
+
+                    let right = match self.peek_clone() {
+                        Ok(Operator(next_op)) if OP_PRIORITY[&next_op] > priority => {
+                            real_next_op = next_op.clone();
+                            self.maybe_binary(right_atom, OP_PRIORITY[&next_op])?  // wrap to right
+                        }
+                        Ok(Operator(next_op)) => {
+                            real_next_op = next_op.clone();
+                            other_priority = OP_PRIORITY[&next_op];
+                            priority = other_priority; // TODO this is disgusting
+                            right_atom
+                        }
+                        _ => {
+                            should_break = true;
+                            right_atom
+                        }
+                    };
+
+                    ast = Box::new(Ast::Binary {
+                        op: op.to_string(),
+                        lhs: ast,
+                        rhs: right
+                    });
+                    op = real_next_op;
+                }
+            // let _ = self.input.next();
+                Ok(ast)
+            }
 
         }
-        Ok(left)
+        else {
+            Ok(left)
+        }
     }
 
 }
@@ -532,6 +569,38 @@ mod tests {
             Ok(x) => assert_eq!(x, 6.0),
             Err(e) => panic!("{}", e.display_chain())
         }
+        match calc.eval("2 + 2 + 2 + 2 + 2") {
+            Ok(x) => assert_eq!(x, 10.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
+        match calc.eval("2 * 2 * 2 + 2 + 2") {
+            Ok(x) => assert_eq!(x, 12.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
+        match calc.eval("2 * 2 * 2 + 2 * 2 * 2") {
+            Ok(x) => assert_eq!(x, 16.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
+    }
+
+    #[test]
+    fn test_right_chaining() {
+        let mut calc = Calculator::new();
+        match calc.eval("32 /2 /2 /2  /2") {
+            Ok(x) => assert_eq!(x, 2.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
+    }
+
+    #[ignore]
+    #[test]
+    fn dunno_yet() {
+        let mut calc = Calculator::new();
+        match calc.eval("2 * 2 * 2 + 2 = 2") {
+            Ok(x) => assert_eq!(x, 2.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
+
     }
 }
 
