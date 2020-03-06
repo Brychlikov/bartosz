@@ -602,5 +602,14 @@ mod tests {
         }
 
     }
+    
+    #[test]
+    fn double_operator_panic_test() {
+        let mut calc = Calculator::new();
+        match calc.eval("32 // 2") {
+            Ok(x) => panic!("Should error, got{}", x),
+            Err(_) => ()
+        };
+    }
 }
 
