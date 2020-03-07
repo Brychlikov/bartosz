@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet};
 use error_chain::bail;
 use std::borrow::Borrow;
 use std::hash::Hash;
+#[allow(unused_imports)]
+use log::{debug, info, trace, warn, error};
 
 pub mod errors {
     use error_chain::error_chain;
@@ -70,7 +72,7 @@ impl Calculator {
         let mut parser = Parser::from_input(input);
         let ast = parser.parse_expression()
             .chain_err(|| "Syntax Error: ")?;
-        println!("{:#?}", ast);
+        debug!("Evaluating {:#?}", ast);
         let res = ast.eval(&mut self.env)
             .chain_err(|| "Evaluation error: ")?;
         if parser.input.peek().is_none() {
@@ -132,11 +134,8 @@ impl Ast {
 
     fn eval_assign(&self, env: &mut Env) -> Result<f64> {
         if let Ast::Assign { lhs, rhs } = self {
-            // println!("begin assign");
             
             let dep_set = rhs.dependency_set(env);
-            // println!("Assigning {} to {:#?}", lhs, rhs);
-            // println!("Dependency set: {:?}", &dep_set);
             if dep_set.contains(lhs) {
                 bail!("Dependency cycle");
             }
@@ -144,7 +143,6 @@ impl Ast {
             // TODO consider order of evaling res and inserting
             let res = rhs.eval(env);
             env.insert(lhs.to_string(), *rhs.clone());
-            // println!("end assign");
             res
         }
         else {
@@ -156,8 +154,6 @@ impl Ast {
         if let Ast::Var { name } = self {
             let ans = env.get(name).cloned();
             if let Some(ast) = ans {
-                // println!("Dependency set of {}: {:?}", &name, &dep_set);
-                // println!("Env dump:\n {:#?}", env);
                 Ok(ast.eval(env)?)
             }
             else {
@@ -511,8 +507,13 @@ impl Parser<'_> {
 mod tests {
     use super::*;
 
+    fn init_log() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[test]
     fn test_parse_atomic() {
+        init_log();
         let cases = vec![
             ("15.5", Ast::Number(15.5)),
             ("(2 + 2)", Ast::Binary{ op: "+".to_owned(), lhs: Box::new(Ast::Number(2.0)), rhs: Box::new(Ast::Number(2.0)) }),
@@ -532,6 +533,7 @@ mod tests {
 
     #[test]
     fn test_simple_circular_dep() {
+        init_log();
         let mut calc = Calculator::new();
         let _ = calc.eval("x = 5");
         let _ = calc.eval("y = 5 + x");
@@ -544,6 +546,7 @@ mod tests {
 
     #[test]
     fn test_binary_circular_dep() {
+        init_log();
         let mut calc = Calculator::new();
 
         let _ = calc.eval("x = 5");
@@ -559,6 +562,7 @@ mod tests {
 
     #[test]
     fn test_variable_eval() {
+        init_log();
         let mut calc = Calculator::new();
         let res1 = calc.eval("x = 5").unwrap();
         assert_eq!(res1, 5.0);
@@ -574,12 +578,14 @@ mod tests {
 
     #[test]
     fn test_power() {
+        init_log();
         let mut calc = Calculator::new();
         assert_eq!(calc.eval("2 ^ 3").unwrap(), 8.0);
     }
 
     #[test]
     fn test_implicit_multiplication() {
+        init_log();
         let mut calc = Calculator::new();
         let res = calc.eval("2 + 3(4 - 5)").unwrap();
         assert_eq!(res, -1.0);
@@ -592,12 +598,14 @@ mod tests {
 
     #[test]
     fn assign_non_existent() {
+        init_log();
         let mut calc = Calculator::new();
         let _ = calc.eval("x = a").unwrap_err();
     }
 
     #[test]
     fn assign_to_assign_value() {
+        init_log();
         let mut calc = Calculator::new();
         match calc.eval("x = y = 5") {
             Ok(x) => assert_eq!(x, 5.0),
@@ -607,6 +615,7 @@ mod tests {
 
     #[test]
     fn equal_priority_chain() {
+        init_log();
         let mut calc = Calculator::new();
         match calc.eval("2 + 2 + 2") {
             Ok(x) => assert_eq!(x, 6.0),
@@ -628,15 +637,17 @@ mod tests {
 
     #[test]
     fn test_right_chaining() {
+        init_log();
         let mut calc = Calculator::new();
-        match calc.eval("32 /2 /2 /2  /2") {
-            Ok(x) => assert_eq!(x, 2.0),
+        match calc.eval("32 / 2 /2 /2  /2") {
+            Ok(x) => assert_eq!(x, 1.0),
             Err(e) => panic!("{}", e.display_chain())
         }
     }
 
     #[test]
     fn test_incorrect_assignment() {
+        init_log();
         let mut calc = Calculator::new();
         match calc.eval("2 * 2 * 2 + 2 = 2") {
             Ok(x) => panic!("Should error, got {}", x),
@@ -647,6 +658,7 @@ mod tests {
     
     #[test]
     fn double_operator_panic_test() {
+        init_log();
         let mut calc = Calculator::new();
         match calc.eval("32 // 2") {
             Ok(x) => panic!("Should error, got{}", x),

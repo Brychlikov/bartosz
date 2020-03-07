@@ -5,6 +5,7 @@ use rustyline::error::ReadlineError;
 use error_chain::ChainedError;
 
 fn main() {
+    env_logger::init();
     let mut calc = Calculator::new();
 
     let mut rl = Editor::<()>::new();
