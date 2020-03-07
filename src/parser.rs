@@ -71,7 +71,7 @@ impl Calculator {
         let mut parser = Parser::from_str(input);
         let ast = parser.parse_expression()
             .chain_err(|| "Syntax Error: ")?;
-        // println!("{:#?}", ast);
+        println!("{:#?}", ast);
         let res = ast.eval(&mut self.env)
             .chain_err(|| "Evaluation error: ")?;
         if let None = parser.input.peek() {
@@ -445,6 +445,9 @@ impl Parser<'_> {
                     right_atom = self.maybe_mul(right_atom)?;
 
                     let right = match self.peek_clone() {
+                        Ok(Operator(op)) if op == "=" => {
+                            return Err("Expected variable on lhs of assignment".into())
+                        }
                         Ok(Operator(next_op)) if get_priority(&next_op)? > priority => {
                             real_next_op = next_op.clone();
                             self.maybe_binary(right_atom, get_priority(&next_op)?)?  // wrap to right
@@ -633,13 +636,12 @@ mod tests {
         }
     }
 
-    #[ignore]
     #[test]
-    fn dunno_yet() {
+    fn test_incorrect_assignment() {
         let mut calc = Calculator::new();
         match calc.eval("2 * 2 * 2 + 2 = 2") {
-            Ok(x) => assert_eq!(x, 2.0),
-            Err(e) => panic!("{}", e.display_chain())
+            Ok(x) => panic!("Should error, got {}", x),
+            Err(_) => (),
         }
 
     }
