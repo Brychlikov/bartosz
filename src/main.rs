@@ -10,6 +10,7 @@ fn main() {
     let mut rl = Editor::<()>::new();
     loop {
         match rl.readline("> ") {
+            Ok(s) if s.chars().all(|c| c.is_whitespace()) => (),
             Ok(input) => {
                 rl.add_history_entry(&input);
                 match calc.eval(&input) {
