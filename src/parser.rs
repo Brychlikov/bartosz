@@ -5,6 +5,8 @@ use error_chain::ChainedError;
 use lazy_static::lazy_static;
 use std::collections::{HashMap, HashSet};
 use error_chain::bail;
+use std::borrow::Borrow;
+use std::hash::Hash;
 
 pub mod errors {
     use error_chain::error_chain;
@@ -287,6 +289,13 @@ lazy_static! {
     };
 }
 
+fn get_priority<S>(op: &S) -> Result<i32>
+    where String: Borrow<S>,
+          S: Eq + Hash + std::fmt::Display
+{
+    OP_PRIORITY.get(&op).map(|x| *x).chain_err(|| format!("Unknown operator {}", op))
+}
+
 impl Parser<'_> {
 
     pub fn from_str(source: &str) -> Parser {
@@ -297,7 +306,7 @@ impl Parser<'_> {
     pub fn parse_expression(&mut self) -> Result<Box<Ast>> {
         let atomic = self.parse_atomic()?;
         let ast = match self.peek_clone() {
-            Ok(Operator(op)) => self.maybe_binary(atomic, OP_PRIORITY[&op])?,
+            Ok(Operator(op)) => self.maybe_binary(atomic, get_priority(&op)?)?,
             _ => atomic
         };
         Ok(ast)
@@ -388,7 +397,7 @@ impl Parser<'_> {
     fn maybe_binary(&mut self, left: Box<Ast>, mut priority: i32) -> Result<Box<Ast>> {
         if let Ok(Operator(mut op)) | Ok(Punctuation(mut op)) = self.peek_clone() {
 
-            let mut other_priority = OP_PRIORITY[&op];
+            let mut other_priority = get_priority(&op)?;
             let mut ast = left;
 
                 
@@ -433,13 +442,13 @@ impl Parser<'_> {
                         .chain_err(|| "Parser error")?;
 
                     let right = match self.peek_clone() {
-                        Ok(Operator(next_op)) if OP_PRIORITY[&next_op] > priority => {
+                        Ok(Operator(next_op)) if get_priority(&next_op)? > priority => {
                             real_next_op = next_op.clone();
-                            self.maybe_binary(right_atom, OP_PRIORITY[&next_op])?  // wrap to right
+                            self.maybe_binary(right_atom, get_priority(&next_op)?)?  // wrap to right
                         }
                         Ok(Operator(next_op)) => {
                             real_next_op = next_op.clone();
-                            other_priority = OP_PRIORITY[&next_op];
+                            other_priority = get_priority(&next_op)?;
                             priority = other_priority; // TODO this is disgusting
                             right_atom
                         }
