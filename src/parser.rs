@@ -305,12 +305,12 @@ impl Parser<'_> {
 
     pub fn parse_expression(&mut self) -> Result<Box<Ast>> {
         let atomic = self.parse_atomic()?;
-        let ast = match self.peek_clone() {
-            Ok(Operator(op)) => self.maybe_binary(atomic, get_priority(&op)?)?,
-            _ => atomic
+        let mut ast = self.maybe_mul(atomic)?;
+        ast = match self.peek_clone() {
+            Ok(Operator(op)) => self.maybe_binary(ast, get_priority(&op)?)?,
+            _ => ast
         };
         Ok(ast)
-        
     }
 
     fn parse_atomic(&mut self) -> Result<Box<Ast>> {
@@ -404,8 +404,10 @@ impl Parser<'_> {
             if other_priority > priority || op == "=" {  // assignment should always be right-to-left
                 let _ = self.input.next();
 
-                let atom = self.parse_atomic()
+                let mut atom = self.parse_atomic()
                     .chain_err(|| "Parser error")?;
+                
+                atom = self.maybe_mul(atom)?;
                 let right = self.maybe_binary(atom, other_priority)
                     .chain_err(|| "Parser error")?;
                 if op == "=" {
@@ -434,12 +436,13 @@ impl Parser<'_> {
                     let _ = self.input.next();
                     let mut  real_next_op = op.clone();
 
-                    let right_atom = match self.parse_atomic() {
+                    let mut right_atom = match self.parse_atomic() {
                         x @ Ok(_) => x,
                         Err(Error(ErrorKind::EOF, _)) => { return Ok(ast); }
                         e => e,
                     }
                         .chain_err(|| "Parser error")?;
+                    right_atom = self.maybe_mul(right_atom)?;
 
                     let right = match self.peek_clone() {
                         Ok(Operator(next_op)) if get_priority(&next_op)? > priority => {
@@ -472,6 +475,30 @@ impl Parser<'_> {
         }
         else {
             Ok(left)
+        }
+    }
+
+    fn maybe_mul(&mut self, left: Box<Ast>) -> Result<Box<Ast>> {
+        match self.peek_clone() {
+            Ok(Punctuation(r)) if r == "("  => {
+                let mut right = self.parse_atomic()?;
+                right = self.maybe_mul(right)?;
+                Ok(Box::new(Ast::Binary {
+                    op: "*".to_owned(),
+                    lhs: left,
+                    rhs: right
+                }))
+            }
+            Ok(Var(_)) => {
+                let mut right = self.parse_atomic()?;
+                right = self.maybe_mul(right)?;
+                Ok(Box::new(Ast::Binary {
+                    op: "*".to_owned(),
+                    lhs: left,
+                    rhs: right
+                }))
+            }
+            _ => Ok(left)
         }
     }
 
@@ -554,6 +581,11 @@ mod tests {
         let mut calc = Calculator::new();
         let res = calc.eval("2 + 3(4 - 5)").unwrap();
         assert_eq!(res, -1.0);
+
+        match calc.eval("(1+2)(3+4)(5+6)") {
+            Ok(x) => assert_eq!(x, 231.0),
+            Err(e) => panic!("{}", e.display_chain())
+        }
     }
 
     #[test]
