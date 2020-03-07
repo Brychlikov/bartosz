@@ -55,6 +55,7 @@ pub enum Ast {
 
 type Env = HashMap<String, Ast>;
 
+#[derive(Default)]
 pub struct Calculator {
     env: Env,
 }
@@ -62,19 +63,17 @@ pub struct Calculator {
 impl Calculator {
 
     pub fn new() -> Calculator {
-        Calculator {
-            env: HashMap::new(),
-        }
+        Calculator::default()
     }
 
     pub fn eval(&mut self, input: &str) -> Result<f64> {
-        let mut parser = Parser::from_str(input);
+        let mut parser = Parser::from_input(input);
         let ast = parser.parse_expression()
             .chain_err(|| "Syntax Error: ")?;
         println!("{:#?}", ast);
         let res = ast.eval(&mut self.env)
             .chain_err(|| "Evaluation error: ")?;
-        if let None = parser.input.peek() {
+        if parser.input.peek().is_none() {
             Ok(res)
         }
         else {
@@ -155,7 +154,7 @@ impl Ast {
 
     fn eval_var(&self, env: &mut Env) -> Result<f64> {
         if let Ast::Var { name } = self {
-            let ans = env.get(name).map(|x| x.clone());
+            let ans = env.get(name).cloned();
             if let Some(ast) = ans {
                 // println!("Dependency set of {}: {:?}", &name, &dep_set);
                 // println!("Env dump:\n {:#?}", env);
@@ -293,13 +292,13 @@ fn get_priority<S>(op: &S) -> Result<i32>
     where String: Borrow<S>,
           S: Eq + Hash + std::fmt::Display
 {
-    OP_PRIORITY.get(&op).map(|x| *x).chain_err(|| format!("Unknown operator {}", op))
+    OP_PRIORITY.get(&op).copied().chain_err(|| format!("Unknown operator {}", op))
 }
 
 impl Parser<'_> {
 
-    pub fn from_str(source: &str) -> Parser {
-        let tok = TokenStream::from_str(source);
+    pub fn from_input(source: &str) -> Parser {
+        let tok = TokenStream::from_input(source);
         Parser { input: tok.peekable() }
     }
 
@@ -329,7 +328,7 @@ impl Parser<'_> {
             },
             Var(name) => {
                 let _ = self.input.next();
-                Ok(Box::new(Ast::Var { name: name.clone() }))
+                Ok(Box::new(Ast::Var { name }))
             },
             Punctuation(c) if c == "(" => {
                 let _= self.input.next();
@@ -344,7 +343,7 @@ impl Parser<'_> {
             Keyword(name) => {
                 let _ = self.input.next();
                 let args = self.parse_args()?;
-                Ok(Box::new(Ast::Func { func: name.to_string(), args}))
+                Ok(Box::new(Ast::Func { func: name, args}))
             }
             x => Err(format!("Can't handle token {:?} in atomic parser", x).into()),
         }   
@@ -390,7 +389,7 @@ impl Parser<'_> {
             .chain_err(|| Error::from_kind(ErrorKind::EOF))?
         {
             Ok(x) => Ok(x.clone()),
-            Err(e) => return Err(format!("Temporary Error message: {}", e.display_chain()).into()),
+            Err(e) => Err(format!("Temporary Error message: {}", e.display_chain()).into()),
         }
     }
 
@@ -421,9 +420,9 @@ impl Parser<'_> {
                         _ => Err("Expected variable name on lhs of assignment".into())
                     }
                 }
-                return Ok(Box::new(
+                Ok(Box::new(
                         Ast::Binary {
-                            op: op.to_string(),
+                            op,
                             lhs: ast,
                             rhs: right,
                         }
@@ -525,7 +524,7 @@ mod tests {
         ];
         for (case, expected) in cases.into_iter() {
             println!("test begins");
-            let tok = TokenStream::from_str(case);
+            let tok = TokenStream::from_input(case);
             let mut parser = Parser { input: tok.peekable()};
             assert_eq!(expected, *parser.parse_atomic().unwrap());
         }

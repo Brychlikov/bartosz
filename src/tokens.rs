@@ -60,6 +60,7 @@ pub struct TokenStream<'a> {
     input: Peekable<InputStream<'a>>,
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 impl TokenStream<'_> {
 
     const KEYWORDS: [&'static str; 9] = [
@@ -74,7 +75,7 @@ impl TokenStream<'_> {
         "log",
     ];
 
-    pub fn from_str(source: &str) -> TokenStream {
+    pub fn from_input(source: &str) -> TokenStream {
         let input = InputStream::new(source);
         TokenStream {
             input: input.peekable(),
@@ -91,7 +92,7 @@ impl TokenStream<'_> {
                 _ => break,
             }
         }
-        return res
+        res
     }
 
     fn read_punctuation(&mut self) -> Token {
@@ -126,6 +127,7 @@ impl TokenStream<'_> {
         "1234567890".contains(*c)
     }
 
+    #[allow(clippy::trivially_copy_pass_by_ref)]
     fn is_digit_con(c: &char) -> bool {
         "1234567890.".contains(*c) 
     }
