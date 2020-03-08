@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn test_take_while() {
         let source = "abcde2qwerty";
-        let mut it = InputStream::new(source);
+        let it = InputStream::new(source);
         let mut tokit = TokenStream { input: it.peekable() };
         let res = tokit.read_while(|c| c.is_alphabetic());
         let rem: String = tokit.input.collect();

@@ -1,4 +1,4 @@
-use calculator::parser::Calculator;
+use calculator::eval::Calculator;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
 
