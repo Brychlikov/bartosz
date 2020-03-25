@@ -33,31 +33,31 @@ pub enum Token {
     Operator(String),
 }
 
-pub struct InputStream<'a>{
-    it: Peekable<Chars<'a>>,
-}
+// pub struct InputStream<'a>{
+//     it: Peekable<Chars<'a>>,
+// }
 
-impl<'a>  InputStream<'a> {
-    fn new(s: &'a str) -> InputStream<'a> {
-        InputStream {
-            it: s.chars().peekable()
-        }
-    }
-}
+// impl<'a>  InputStream<'a> {
+//     fn new(s: &'a str) -> InputStream<'a> {
+//         InputStream {
+//             it: s.chars().peekable()
+//         }
+//     }
+// }
 
-impl Iterator for InputStream<'_> {
-    type Item = char;
+// impl Iterator for InputStream<'_> {
+//     type Item = char;
 
-    fn next(&mut self) -> Option<char> {
-        while self.it.peek()?.is_whitespace() {
-            let _ = self.it.next()?;
-        }
-        self.it.next()
-    }
-}
+//     fn next(&mut self) -> Option<char> {
+//         while self.it.peek()?.is_whitespace() {
+//             let _ = self.it.next()?;
+//         }
+//         self.it.next()
+//     }
+// }
 
 pub struct TokenStream<'a> {
-    input: Peekable<InputStream<'a>>,
+    input: Peekable<Chars<'a>>,
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -76,9 +76,8 @@ impl TokenStream<'_> {
     ];
 
     pub fn from_input(source: &str) -> TokenStream {
-        let input = InputStream::new(source);
         TokenStream {
-            input: input.peekable(),
+            input: source.chars().peekable(),
         }
     }
 
@@ -167,6 +166,7 @@ impl<'a> Iterator for TokenStream<'a> {
     type Item = Result<Token>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let _ = self.read_while(|c| c.is_whitespace());
         let ch = *self.input.peek()?;
 
         if TokenStream::is_punctuation(&ch){
@@ -188,8 +188,7 @@ impl<'a> Iterator for TokenStream<'a> {
 
 
 pub fn parse(source: &str) -> Result<Vec<Token>> {
-    let in_stream = InputStream::new(source);
-    let token_stream = TokenStream { input: in_stream.peekable() };
+    let token_stream = TokenStream { input: source.chars().peekable() };
     token_stream.collect()
 }
 
@@ -198,24 +197,23 @@ mod tests {
     use super::*;
     use error_chain::ChainedError;
 
-    #[test]
-    fn test_whitespace_iter() {
-        let source = " ab  c        def ";
-        let mut it = InputStream::new(source);
-        assert_eq!(it.next(), Some('a'));
-        assert_eq!(it.next(), Some('b'));
-        assert_eq!(it.next(), Some('c'));
-        assert_eq!(it.next(), Some('d'));
-        assert_eq!(it.next(), Some('e'));
-        assert_eq!(it.next(), Some('f'));
-        assert_eq!(it.next(), None);
-    }
+    // #[test]
+    // fn test_whitespace_iter() {
+    //     let source = " ab  c        def ";
+    //     let mut it = InputStream::new(source);
+    //     assert_eq!(it.next(), Some('a'));
+    //     assert_eq!(it.next(), Some('b'));
+    //     assert_eq!(it.next(), Some('c'));
+    //     assert_eq!(it.next(), Some('d'));
+    //     assert_eq!(it.next(), Some('e'));
+    //     assert_eq!(it.next(), Some('f'));
+    //     assert_eq!(it.next(), None);
+    // }
 
     #[test]
     fn test_take_while() {
         let source = "abcde2qwerty";
-        let it = InputStream::new(source);
-        let mut tokit = TokenStream { input: it.peekable() };
+        let mut tokit = TokenStream { input: source.chars().peekable() };
         let res = tokit.read_while(|c| c.is_alphabetic());
         let rem: String = tokit.input.collect();
         assert_eq!(res, "abcde");
@@ -276,6 +274,30 @@ mod tests {
             Err(e) => panic!("Error during tokenization: {}", e.display_chain()),
         };
 
+    }
+
+    #[test]
+    fn test_sticky_operators() {
+        let cases = vec![
+            ("2 // 2", vec![
+             Token::Number(2.0),
+             Token::Operator("//".to_string()),
+             Token::Number(2.0),
+            ]), 
+
+            ("2 * + 2", vec![
+             Token::Number(2.0),
+             Token::Operator("*".to_string()),
+             Token::Operator("+".to_string()),
+             Token::Number(2.0),
+            ])
+        ];
+        for (s, expected) in cases.iter() {
+            match parse(s) {
+                Ok(tokens) => assert_eq!(tokens, *expected),
+                Err(e) => panic!("Error during tokenization: {}", e.display_chain()),
+            };
+        }
     }
 
     #[test]

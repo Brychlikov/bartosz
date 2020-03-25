@@ -42,6 +42,10 @@ pub enum Ast {
         lhs: Box<Ast>,
         rhs: Box<Ast>,
     },
+    Unary {
+        op: String,
+        operand: Box<Ast>,
+    },
     Func {
         func: String,
         args: Vec<Ast>,
@@ -129,7 +133,12 @@ impl Parser<'_> {
                 let _ = self.input.next();
                 let args = self.parse_args()?;
                 Ok(Box::new(Ast::Func { func: name, args}))
-            }
+            },
+            Operator(op) => {
+                let _ = self.input.next();
+                let operand = self.parse_atomic()?;
+                Ok(Box::new(Ast::Unary{ op, operand }))
+            },
             x => Err(format!("Can't handle token {:?} in atomic parser", x).into()),
         }   
     }

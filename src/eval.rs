@@ -16,6 +16,11 @@ pub mod errors {
             UndefinedVar {
                 description("Variable not defined")
             }
+
+            IllegalUnary(op: String) {
+                description("Operator cannot be used as unary"),
+                display("{} cannot be used as a unary operator", op),
+            }
         }
 
         foreign_links {
@@ -65,6 +70,7 @@ impl Ast {
             Ast::Func { .. } => self.eval_func(env),
             Ast::Var { .. } => self.eval_var(env),
             Ast::Assign { .. } => self.eval_assign(env),
+            Ast::Unary { .. } => self.eval_unary(env),
         }
     }
 
@@ -76,6 +82,9 @@ impl Ast {
                 res.extend(lhs.dependency_set(env));
                 res.extend(rhs.dependency_set(env));
                 res
+            },
+            Ast::Unary { operand, .. } => {
+                operand.dependency_set(env)
             },
             Ast::Func { args, .. } => {
                 let mut res = HashSet::new();
@@ -151,6 +160,17 @@ impl Ast {
         }
         else {
             panic!("eval_binary called on not Ast::Binary");
+        }
+    }
+
+    fn eval_unary(&self, env: &mut Env) -> Result<f64> {
+        if let Ast::Unary { op, operand } = self {
+            match op.as_ref() {
+                "-" => Ok(-operand.eval(env)?),
+                _ => bail!(Error::from_kind(ErrorKind::IllegalUnary(op.to_string())))
+            }
+        } else {
+            panic!("eval_unary called on not Ast::Unary")
         }
     }
 
@@ -382,6 +402,27 @@ mod tests {
             Ok(x) => panic!("Should error, got{}", x),
             Err(_) => ()
         };
+    }
+
+    #[test]
+    fn unary_operator_test() {
+        init_log();
+        let mut calc = Calculator::new();
+        match calc.eval("-5") {
+            Ok(x) => assert_eq!(x, -5.0),
+            Err(e) => panic!("{}", e.display_chain())
+        };
+
+        match calc.eval("x = 2 * -5") {
+            Ok(x) => assert_eq!(x, -10.0),
+            Err(e) => panic!("{}", e.display_chain())
+        };
+
+        match calc.eval("x = -5 * 2") {
+            Ok(x) => assert_eq!(x, -10.0),
+            Err(e) => panic!("{}", e.display_chain())
+        };
+
     }
 
 }
