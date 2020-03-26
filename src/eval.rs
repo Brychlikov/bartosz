@@ -425,4 +425,14 @@ mod tests {
 
     }
 
+    #[test]
+    fn big_fraction_test() {
+        init_log();
+        let mut calc = Calculator::new();
+        match calc.eval("1 / (1/2 + 1/2)") {
+            Ok(x) => assert_eq!(x, 1.0),
+            Err(e) => panic!("{}", e.display_chain())
+        };
+    }
+
 }

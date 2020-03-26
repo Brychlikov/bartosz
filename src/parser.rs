@@ -110,7 +110,7 @@ impl Parser<'_> {
             Err(e) => return Err(format!("Temporary Error message: {}", e.display_chain()).into()),
         };
             // .chain_err(|| "Error in tokenizer")?.clone();
-        match ch {
+        let res = match ch {
             Number(num) => {
                 let _ = self.input.next();
                 Ok(Box::new(Ast::Number(num)))
@@ -140,7 +140,8 @@ impl Parser<'_> {
                 Ok(Box::new(Ast::Unary{ op, operand }))
             },
             x => Err(format!("Can't handle token {:?} in atomic parser", x).into()),
-        }   
+        };
+        res
     }
 
     fn parse_args(&mut self) -> Result<Vec<Ast>> {
@@ -229,7 +230,12 @@ impl Parser<'_> {
             else {
                 let mut should_break = false;
                 while other_priority == priority && !should_break {
-                    let _ = self.input.next();
+                    match self.input.peek() {
+                        Some(Ok(Punctuation(p))) if p == ")" => return Ok(ast),
+                        _ => (),
+                    }
+                    let n = self.input.next();
+
                     let mut  real_next_op = op.clone();
 
                     let mut right_atom = match self.parse_atomic() {
