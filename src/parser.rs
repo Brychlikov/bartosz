@@ -10,6 +10,8 @@ use std::hash::Hash;
 #[allow(unused_imports)]
 use log::{debug, info, trace, warn, error};
 
+use err_macro::{noop, wrap_error};
+
 pub mod errors {
     use error_chain::error_chain;
     error_chain! {
@@ -77,6 +79,8 @@ lazy_static! {
     };
 }
 
+
+#[noop]
 fn get_priority<S>(op: &S) -> Result<i32>
     where String: Borrow<S>,
           S: Eq + Hash + std::fmt::Display
@@ -91,6 +95,7 @@ impl Parser<'_> {
         Parser { input: tok.peekable() }
     }
 
+    #[wrap_error]
     pub fn parse_expression(&mut self) -> Result<Box<Ast>> {
         let atomic = self.parse_atomic()?;
         let mut ast = self.maybe_mul(atomic)?;
@@ -101,6 +106,7 @@ impl Parser<'_> {
         Ok(ast)
     }
 
+    #[wrap_error]
     fn parse_atomic(&mut self) -> Result<Box<Ast>> {
         let ch = match
             self.input.peek()
@@ -143,6 +149,7 @@ impl Parser<'_> {
         }   
     }
 
+    #[wrap_error]
     fn parse_args(&mut self) -> Result<Vec<Ast>> {
         let ch = self.input.peek();
         let mut res = Vec::new();
@@ -180,6 +187,7 @@ impl Parser<'_> {
         self.input.peek()
     }
 
+    #[wrap_error]
     pub fn peek_clone(&mut self) -> Result<Token> {
         match
             self.input.peek()
@@ -190,6 +198,7 @@ impl Parser<'_> {
         }
     }
 
+    #[wrap_error]
     fn maybe_binary(&mut self, left: Box<Ast>, mut priority: i32) -> Result<Box<Ast>> {
         if let Ok(Operator(mut op)) | Ok(Punctuation(mut op)) = self.peek_clone() {
 
@@ -277,6 +286,7 @@ impl Parser<'_> {
         }
     }
 
+    #[wrap_error]
     fn maybe_mul(&mut self, left: Box<Ast>) -> Result<Box<Ast>> {
         match self.peek_clone() {
             Ok(Punctuation(r)) if r == "("  => {
